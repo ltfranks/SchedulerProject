@@ -1,0 +1,7 @@
+
+This is the exact command line input:
+
+schedule 1000 two 1 : two 2 : two 3
+
+where two takes an integer argument n, and prints n, n times, in a 
+field 8n characters wide and sleeping for one second in between.
