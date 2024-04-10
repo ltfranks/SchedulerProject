@@ -37,28 +37,31 @@ int parse_commands(char *argv[], process processes[MAX_PROCESSES], int argc){
     */
    int i;
     for (i = 2; i < argc && process_count < MAX_PROCESSES; i++){
-        int arg_count = 0;
+        if(strcmp(argv[i], ":") == 0){
+            i++;
+            continue;
+        }
         
         /* adding ./ to the beginning of two */
         char *command_with_path = malloc(strlen(argv[i]) + 3);
         strcpy(command_with_path, "./");
         strcat(command_with_path, argv[i]);
 
-        processes[process_count].argv[arg_count++] = command_with_path;
+        processes[process_count].argv[0] = command_with_path;
+        
 
         i++;
-
-        while (argv[i] != NULL && strcmp(argv[i], ":") != 0 && arg_count < MAX_ARGUMENTS){
+        int arg_count = 1;
+        while (i < argc && strcmp(argv[i], ":") != 0 && arg_count < MAX_ARGUMENTS){
             processes[process_count].argv[arg_count++] = argv[i++];
         }
+        
         /* putting NULL at end of args */
         processes[process_count].argv[arg_count] = NULL;
         processes[process_count].active = 1;
         process_count++;
-        
-        /* next arg */
-        if(i < argc && strcmp(argv[i], ":") == 0) i++;
     }
+
     return process_count;
 }
 
@@ -83,7 +86,6 @@ void sigchld_handler(int signum){
                 printf("yo! \n");
                 if (processes[i].pid == pid){
                     processes[i].active = 0;
-                    
                     break;
                 }
                 
@@ -105,7 +107,12 @@ void schedule_next_process(){
             if (processes[next_process].pid == 0) {
                 pid_t pid = fork();
                 if(pid == 0){
+                    printf("%s", processes[next_process].argv[0]);
+                    printf("%s", processes[next_process].argv[1]);
+                    printf("\n");
+
                     execvp(processes[next_process].argv[0], processes[next_process].argv);
+                    perror("execvp failed");
                     exit(EXIT_FAILURE); /* shouldn't be reached */
                 } else {
                     processes[next_process].pid = pid;
@@ -115,9 +122,10 @@ void schedule_next_process(){
                 /* kill() is used to send CONTINUE signal */
                 kill(processes[next_process].pid, SIGCONT);
             }
-
+            /* Alarm is being set before process starts? */
             current_process = next_process;
             alarm(quantum);
+            printf("ALARM \n");
             break;
         }
         /* next_process + 1 */
@@ -141,10 +149,7 @@ void execute_and_schedule() {
         // Check if all processes are inactive to potentially break the loop
         int all_inactive = 1;
         int i;
-        for (i = 0; i < total_processes; i++) {
-            
-            /* printf("yo!\n"); */
-            
+        for (i = 0; i < total_processes; i++) {            
             if (processes[i].active) {
                 all_inactive = 0;
                 break;
