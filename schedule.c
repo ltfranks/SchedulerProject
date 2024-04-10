@@ -91,7 +91,6 @@ void schedule_next_process(){
         if (processes[next_process].active) {
             /* there is still processes to behold */
             all_inactive = 0;
-            printf("yoyoyo!\n");
             /* if process has NOT started (pid == 0), then fork and exec. else continue; */
             if (processes[next_process].pid == 0) {
                 pid_t pid = fork();
