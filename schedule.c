@@ -28,16 +28,6 @@ void sigchld_handler(int signum);
 void execute_and_schedule();
 void schedule_next_process();
 
-int main(int argc, char *argv[]){
-    int quantum;
-    quantum = atoi(argv[1]);
-    total_processes = parse_commands((char **) argv, processes, argc);
-    
-    execute_and_schedule();
-
-    return 0;
-}
-
 int parse_commands(char *argv[], process processes[MAX_PROCESSES], int argc){
     int process_count = 0;
     /* 
@@ -54,7 +44,9 @@ int parse_commands(char *argv[], process processes[MAX_PROCESSES], int argc){
         }
         /* putting NULL at end of args */
         processes[process_count].argv[arg_count] = NULL;
+        processes[process_count].active = 1;
         process_count++;
+        
         /* next arg */
         if(i < argc && strcmp(argv[i], ":") == 0) i++;
     }
@@ -65,63 +57,118 @@ void sigalrm_handler(int signum){
     if (current_process != -1){
         /* stop current process */
         kill(processes[current_process].pid, SIGSTOP);
+        schedule_next_process();
     }
 }
 
 void sigchld_handler(int signum){
     int status;
     /* wait for any child process to change then notify parent of what changed */
-    pid_t pid = waitpid(-1, &status, WNOHANG | WUNTRACED);
+    pid_t pid;
     
-    while (pid > 0) {
-        if(WIFSTOPPED(status) || WIFEXITED(status) || WIFSIGNALED(status)){
-            schedule_next_process();
+    while ((pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) {
+        if(WIFEXITED(status) || WIFSIGNALED(status)){
+            /* mark process as DONE if it exited */
+            int i;
+            for(i = 0; i < total_processes; i++){
+                if (processes[i].pid == pid){
+                    processes[i].active = 0;
+                    break;
+                }
+                
+            }
         }
     }
 }
 
 void schedule_next_process(){
-    /* go through process index and wrap around if need be */
-    current_process = (current_process + 1) % total_processes;
-    /* if process is already complete, skip and look at next process */
-    while(!processes[current_process].active){
-        current_process = (current_process+1) % total_processes;
-    }
+    int next_process = (current_process + 1) % total_processes;
+    /* no processes case */
+    int all_inactive = 1;
+    int initial_process = next_process;
 
-    /* if process has not started (Pid == 0), fork(), exec() */
-    /* else, continue same process -> SIGCONT */
-    if(processes[current_process].pid == 0){
-        pid_t pid = fork();
-        if (pid == 0){
-            execvp(processes[current_process].argv[0], processes[current_process].argv);
-            exit(EXIT_FAILURE);
-        } else {
-            processes[current_process].pid = pid;
+    do {
+        if (processes[next_process].active) {
+            /* there is still processes to behold */
+            all_inactive = 0;
+            printf("yoyoyo!\n");
+            /* if process has NOT started (pid == 0), then fork and exec. else continue; */
+            if (processes[next_process].pid == 0) {
+                pid_t pid = fork();
+                if(pid == 0){
+                    printf("before!\n");
+                    printf("'%s' ", processes[next_process].argv[0]);
+                    printf("'%s' ", processes[next_process].argv[1]);
+                    printf("'%s' ", processes[next_process].argv[2]);
+                    printf("\n");
+
+                    execvp(processes[next_process].argv[0], processes[next_process].argv);
+                    
+                    printf("after!\n");
+                    exit(EXIT_FAILURE); /* shouldn't be reached */
+                } else {
+                    processes[next_process].pid = pid;
+                }
+                /* process HAS started so continue */
+            } else {
+                /* kill() is used to send CONTINUE signal */
+                kill(processes[next_process].pid, SIGCONT);
+            }
+
+            current_process = next_process;
+/* problem: only sets alarm one time. So stuck during 1st process */            
+            alarm(quantum);
+            break;
         }
-    } else {
-        kill(processes[current_process].pid, SIGCONT);
-    }
+        /* next_process + 1 */
+        next_process = (next_process + 1) % total_processes;
+        /* if there is NO next process */
+        
+    } while (next_process != initial_process);
 
-    /* sets quantum for next process */
-    alarm(quantum);
+    if (all_inactive){
+        exit(EXIT_SUCCESS);
+    }
 }
 
-void execute_and_schedule(){
-    int i;
-    for(i = 0; i < total_processes; i++){
-        /* if process is done, skip to next process */
-        if(!processes[i].active) continue;
-    
-        current_process = i;
-        pid_t pid = fork();
-        /* child -> execute new process */
-        if(pid == 0){
-            execvp(processes[i].argv[0], processes[i].argv);
-            exit(EXIT_FAILURE);
-        } else {
-            processes[i].pid = pid; /* save child Pid in parent */
-            alarm(quantum);
-            pause();
+void execute_and_schedule() {
+    // Initially trigger the scheduling of the first process
+    schedule_next_process();
+
+    while (1) {
+        pause(); // Wait for signals (SIGALRM or SIGCHLD)
+        
+        // Check if all processes are inactive to potentially break the loop
+        int all_inactive = 1;
+        int i;
+        for (i = 0; i < total_processes; i++) {
+            
+            /* printf("yo!\n"); */
+            
+            if (processes[i].active) {
+                all_inactive = 0;
+                break;
+            }
+        }
+
+        // If all processes are inactive, break the while loop and end scheduling
+        if (all_inactive) {
+            printf("All processes have completed.\n");
+            break;
         }
     }
+}
+
+
+int main(int argc, char *argv[]){
+    
+    quantum = atoi(argv[1]);
+    total_processes = parse_commands((char **) argv, processes, argc);
+    
+    signal(SIGALRM, sigalrm_handler);
+    signal(SIGCHLD, sigchld_handler);
+    
+    execute_and_schedule();
+
+    return 0;
 }
