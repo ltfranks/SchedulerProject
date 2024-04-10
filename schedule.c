@@ -38,7 +38,16 @@ int parse_commands(char *argv[], process processes[MAX_PROCESSES], int argc){
    int i;
     for (i = 2; i < argc && process_count < MAX_PROCESSES; i++){
         int arg_count = 0;
-        /*  */
+        
+        /* adding ./ to the beginning of two */
+        char *command_with_path = malloc(strlen(argv[i]) + 3);
+        strcpy(command_with_path, "./");
+        strcat(command_with_path, argv[i]);
+
+        processes[process_count].argv[arg_count++] = command_with_path;
+
+        i++;
+
         while (argv[i] != NULL && strcmp(argv[i], ":") != 0 && arg_count < MAX_ARGUMENTS){
             processes[process_count].argv[arg_count++] = argv[i++];
         }
@@ -68,16 +77,18 @@ void sigchld_handler(int signum){
     
     while ((pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) {
         if(WIFEXITED(status) || WIFSIGNALED(status)){
-            /* mark process as DONE if it exited */
+            /* mark process as DONE (active = 0) if it exited */
             int i;
             for(i = 0; i < total_processes; i++){
+                printf("yo! \n");
                 if (processes[i].pid == pid){
                     processes[i].active = 0;
+                    
                     break;
                 }
                 
             }
-        }
+        } else if (WIFSTOPPED(status)){}
     }
 }
 
@@ -86,7 +97,6 @@ void schedule_next_process(){
     /* no processes case */
     int all_inactive = 1;
     int initial_process = next_process;
-
     do {
         if (processes[next_process].active) {
             /* there is still processes to behold */
@@ -95,15 +105,7 @@ void schedule_next_process(){
             if (processes[next_process].pid == 0) {
                 pid_t pid = fork();
                 if(pid == 0){
-                    printf("before!\n");
-                    printf("'%s' ", processes[next_process].argv[0]);
-                    printf("'%s' ", processes[next_process].argv[1]);
-                    printf("'%s' ", processes[next_process].argv[2]);
-                    printf("\n");
-
                     execvp(processes[next_process].argv[0], processes[next_process].argv);
-                    
-                    printf("after!\n");
                     exit(EXIT_FAILURE); /* shouldn't be reached */
                 } else {
                     processes[next_process].pid = pid;
@@ -115,7 +117,6 @@ void schedule_next_process(){
             }
 
             current_process = next_process;
-/* problem: only sets alarm one time. So stuck during 1st process */            
             alarm(quantum);
             break;
         }
