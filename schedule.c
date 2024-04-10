@@ -6,6 +6,7 @@
 #include <string.h>
 #include <signal.h>
 #include <sys/types.h>
+#include <sys/time.h>
 
 #define MAX_PROCESSES 100
 #define MAX_ARGUMENTS 10
@@ -27,14 +28,10 @@ void sigalrm_handler(int signum);
 void sigchld_handler(int signum);
 void execute_and_schedule();
 void schedule_next_process();
+void setTimer(int milliseconds);
 
 int parse_commands(char *argv[], process processes[MAX_PROCESSES], int argc){
     int process_count = 0;
-    /* 
-    argv[0] = program
-    argv[1] = quantum
-    Start reading input processes @ argv[2]. 
-    */
    int i;
     for (i = 2; i < argc && process_count < MAX_PROCESSES; i++){
         if(strcmp(argv[i], ":") == 0){
@@ -48,20 +45,17 @@ int parse_commands(char *argv[], process processes[MAX_PROCESSES], int argc){
         strcat(command_with_path, argv[i]);
 
         processes[process_count].argv[0] = command_with_path;
-        
 
         i++;
         int arg_count = 1;
         while (i < argc && strcmp(argv[i], ":") != 0 && arg_count < MAX_ARGUMENTS){
             processes[process_count].argv[arg_count++] = argv[i++];
         }
-        
         /* putting NULL at end of args */
         processes[process_count].argv[arg_count] = NULL;
         processes[process_count].active = 1;
         process_count++;
     }
-
     return process_count;
 }
 
@@ -83,14 +77,14 @@ void sigchld_handler(int signum){
             /* mark process as DONE (active = 0) if it exited */
             int i;
             for(i = 0; i < total_processes; i++){
-                printf("yo! \n");
                 if (processes[i].pid == pid){
                     processes[i].active = 0;
                     break;
                 }
-                
             }
-        } else if (WIFSTOPPED(status)){}
+            setTimer(0);
+            schedule_next_process();
+        }
     }
 }
 
@@ -107,11 +101,9 @@ void schedule_next_process(){
             if (processes[next_process].pid == 0) {
                 pid_t pid = fork();
                 if(pid == 0){
-                    printf("%s", processes[next_process].argv[0]);
-                    printf("%s", processes[next_process].argv[1]);
-                    printf("\n");
 
                     execvp(processes[next_process].argv[0], processes[next_process].argv);
+                    
                     perror("execvp failed");
                     exit(EXIT_FAILURE); /* shouldn't be reached */
                 } else {
@@ -124,8 +116,7 @@ void schedule_next_process(){
             }
             /* Alarm is being set before process starts? */
             current_process = next_process;
-            alarm(quantum);
-            printf("ALARM \n");
+            setTimer(quantum);
             break;
         }
         /* next_process + 1 */
@@ -164,6 +155,12 @@ void execute_and_schedule() {
     }
 }
 
+void setTimer(int milliseconds){
+    struct itimerval timer = {0};
+    timer.it_value.tv_sec = milliseconds / 1000;
+    timer.it_value.tv_usec = (milliseconds % 1000) * 1000;
+    setitimer(ITIMER_REAL, &timer, NULL);
+}
 
 int main(int argc, char *argv[]){
     
