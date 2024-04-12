@@ -1,23 +1,15 @@
+PROJECT 1
 
-This is the exact command line input:
+Name: Luke Franks
 
-schedule 10000 two 1 : two 2 : two 3
 
-       1
-               2
-               2
-                       3
-                       3
-                       3
+Instructions:
 
-schedule 500 two 1 : two 2 : two 3
+To run the schedule do:
 
-       1
-               2
-                       3
-               2
-                       3
-                       3
+% ./schedule 10000 two 1 : two 2 : two 3 : ls
 
-where two takes an integer argument n, and prints n, n times, in a 
-field 8n characters wide and sleeping for one second in between.
+10000 is the quantum for each process
+two is a given program followed a # for its input
+
+Can also run system commands: ls, cat, echo

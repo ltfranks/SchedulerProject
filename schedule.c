@@ -30,6 +30,18 @@ void execute_and_schedule();
 void schedule_next_process();
 void setTimer(int milliseconds);
 
+/* System Commands Check */
+int system_command(const char *command){
+    const char *sys_commands[] = {"ls", "cat", "echo", NULL};
+    int i;
+    for(i = 0; sys_commands[i] != NULL; i++){
+        if(strcmp(command, sys_commands[i]) == 0){
+            return 1; /* if is sys commands */
+        }
+    }
+    return 0; /* not sys command */
+}
+
 int parse_commands(char *argv[], process processes[MAX_PROCESSES], int argc){
     int process_count = 0;
    int i;
@@ -38,15 +50,21 @@ int parse_commands(char *argv[], process processes[MAX_PROCESSES], int argc){
             i++;
             continue;
         }
-        
-        /* adding ./ to the beginning of two */
-        char *command_with_path = malloc(strlen(argv[i]) + 3);
-        strcpy(command_with_path, "./");
-        strcat(command_with_path, argv[i]);
+
+        char *command_with_path;
+        /* if is a sys command */
+        if(system_command(argv[i])){
+            command_with_path = strdup(argv[i]);
+        } else { /* NOT a SYS COMMAND */
+            /* adding ./ to the beginning of two */
+            command_with_path = malloc(strlen(argv[i]) + 3);
+            strcpy(command_with_path, "./");
+            strcat(command_with_path, argv[i]);
+        }
 
         processes[process_count].argv[0] = command_with_path;
-
         i++;
+
         int arg_count = 1;
         while (i < argc && strcmp(argv[i], ":") != 0 && arg_count < MAX_ARGUMENTS){
             processes[process_count].argv[arg_count++] = argv[i++];
@@ -131,13 +149,13 @@ void schedule_next_process(){
 }
 
 void execute_and_schedule() {
-    // Initially trigger the scheduling of the first process
+    /* Start scheduling first process */ 
     schedule_next_process();
 
     while (1) {
-        pause(); // Wait for signals (SIGALRM or SIGCHLD)
+        pause();
         
-        // Check if all processes are inactive to potentially break the loop
+        /* Check if all processes are inactive to potentially break the loop */ 
         int all_inactive = 1;
         int i;
         for (i = 0; i < total_processes; i++) {            
@@ -147,7 +165,7 @@ void execute_and_schedule() {
             }
         }
 
-        // If all processes are inactive, break the while loop and end scheduling
+        /* If all processes are inactive, break the while loop and end scheduling */ 
         if (all_inactive) {
             printf("All processes have completed.\n");
             break;
@@ -156,6 +174,7 @@ void execute_and_schedule() {
 }
 
 void setTimer(int milliseconds){
+    /* set everhting in struct to 0 */
     struct itimerval timer = {0};
     timer.it_value.tv_sec = milliseconds / 1000;
     timer.it_value.tv_usec = (milliseconds % 1000) * 1000;
@@ -166,7 +185,7 @@ int main(int argc, char *argv[]){
     
     quantum = atoi(argv[1]);
     total_processes = parse_commands((char **) argv, processes, argc);
-    
+    /* set signals / alarms */
     signal(SIGALRM, sigalrm_handler);
     signal(SIGCHLD, sigchld_handler);
     
